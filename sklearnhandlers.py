@@ -36,7 +36,7 @@ class UploadLabeledDatapointHandler(BaseHandler):
         sess  = data['dsid']
 
         dbid = self.db.labeledinstances.insert(
-            {"feature":fvals,"label":label,"dsid":sess}
+                {"feature":fvals,"label":label,"dsid":sess}
             )
         self.write_json({"id":str(dbid),"feature":fvals,"label":label})
 
@@ -87,7 +87,7 @@ class UpdateModelForDatasetId(BaseHandler):
 
         # send back the resubstitution accuracy
         # if training takes a while, we are blocking tornado!! No!!
-        self.write_json({"resubAccuracy":acc})
+        self.write_json({"resubAccuracy": acc})
 
 class PredictOneFromDatasetId(BaseHandler):
     def post(self):
@@ -106,12 +106,11 @@ class PredictOneFromDatasetId(BaseHandler):
         # we are blocking tornado!! no!!
         if self.clf == []:
             print('Loading Model From DB')
-            tmp = self.db.models.find_one({"dsid":dsid})
+            tmp = self.db.models.find_one({"dsid": dsid})
             if tmp:
                 self.clf = pickle.loads(tmp['model'])
             else:
                 c1 = KNeighborsClassifier(n_neighbors=3)
-                c1.fit(vals, fvals)
                 self.clf = c1
                 bytes = pickle.dumps(c1)
                 self.db.models.update(
