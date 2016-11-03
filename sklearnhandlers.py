@@ -37,7 +37,7 @@ class UploadLabeledDatapointHandler(BaseHandler):
 
         dbid = self.db.labeledinstances.insert(
             {"feature":fvals,"label":label,"dsid":sess}
-            );
+            )
         self.write_json({"id":str(dbid),"feature":fvals,"label":label})
 
 class RequestNewDatasetId(BaseHandler):
@@ -55,27 +55,35 @@ class UpdateModelForDatasetId(BaseHandler):
         dsid = self.get_int_arg("dsid",default=0)
 
         # create feature vectors from database
-        f=[];
+        f=[]
         for a in self.db.labeledinstances.find({"dsid":dsid}): 
             f.append([float(val) for val in a['feature']])
 
         # create label vector from database
-        l=[];
-        for a in self.db.labeledinstances.find({"dsid":dsid}): 
+        l=[]
+        for a in self.db.labeledinstances.find({"dsid": dsid}):
             l.append(a['label'])
 
         # fit the model to the data
-        c1 = KNeighborsClassifier(n_neighbors=3);
-        acc = -1;
+        c1 = KNeighborsClassifier(n_neighbors=3)
+        acc = -1
         if l:
-            c1.fit(f,l) # training
+            c1.fit(f, l) # training
             lstar = c1.predict(f)
             self.clf = c1
-            acc = sum(lstar==l)/float(len(l))
+            acc = sum(lstar == l)/float(len(l))
             bytes = pickle.dumps(c1)
-            self.db.models.update({"dsid":dsid},
-                {  "$set": {"model":Binary(bytes)}  },
-                upsert=True)
+            self.db.models.update(
+                {
+                    "dsid": dsid
+                },
+                {
+                    "$set": {
+                        "model": Binary(bytes)
+                    }
+                },
+                upsert=True
+            )
 
         # send back the resubstitution accuracy
         # if training takes a while, we are blocking tornado!! No!!
@@ -87,16 +95,35 @@ class PredictOneFromDatasetId(BaseHandler):
         '''
         data = json.loads(self.request.body.decode("utf-8"))    
 
-        vals = data['feature'];
-        fvals = [float(val) for val in vals];
+        vals = data['feature']
+        dsid = data['dsid']
+
+        fvals = [float(val) for val in vals]
         fvals = np.array(fvals).reshape(1, -1)
-        dsid  = data['dsid']
+
 
         # load the model from the database (using pickle)
         # we are blocking tornado!! no!!
-        if(self.clf == []):
+        if self.clf == []:
             print('Loading Model From DB')
             tmp = self.db.models.find_one({"dsid":dsid})
-            self.clf = pickle.loads(tmp['model'])
-        predLabel = self.clf.predict(fvals);
-        self.write_json({"prediction":str(predLabel)})
+            if tmp:
+                self.clf = pickle.loads(tmp['model'])
+            else:
+                c1 = KNeighborsClassifier(n_neighbors=3)
+                c1.fit(vals, fvals)
+                self.clf = c1
+                bytes = pickle.dumps(c1)
+                self.db.models.update(
+                    {
+                        "dsid": dsid
+                    },
+                    {
+                        "$set": {
+                            "model": Binary(bytes)
+                        }
+                    },
+                    upsert=True
+                )
+        predLabel = self.clf.predict(fvals)
+        self.write_json({"prediction": str(predLabel)})
